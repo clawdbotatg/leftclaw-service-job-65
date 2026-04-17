@@ -1,0 +1,13 @@
+--- TEMPLATE FILE
+templates/base/README.md.template.mjs
+
+
+--- ARGS FILES
+	- /solidity-frameworks/foundry/README.md.args.mjs
+
+
+--- RESULTING ARGS
+	- contractsPath:	[`packages/foundry/contracts`]
+	- networkConfigPath:	[`packages/foundry/foundry.toml`]
+	- scriptsPath:	[`packages/foundry/script`]
+	- testCommand:	[`yarn foundry:test`]

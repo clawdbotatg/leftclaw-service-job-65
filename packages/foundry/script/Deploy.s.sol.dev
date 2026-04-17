@@ -1,0 +1,14 @@
+--- TEMPLATE FILE
+templates/extension foundry/packages/foundry/script/Deploy.s.sol.template.mjs
+
+
+--- ARGS FILES
+	- /example-contracts/foundry/packages/foundry/script/Deploy.s.sol.args.mjs
+
+
+--- RESULTING ARGS
+	- deploymentsLogic:	[
+    DeployYourContract deployYourContract = new DeployYourContract();
+    deployYourContract.run();
+]
+	- preContent:	[import { DeployYourContract } from "./DeployYourContract.s.sol";]

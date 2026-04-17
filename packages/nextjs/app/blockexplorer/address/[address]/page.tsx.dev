@@ -1,0 +1,10 @@
+--- TEMPLATE FILE
+templates/base/packages/nextjs/app/blockexplorer/address/[address]/page.tsx.template.mjs
+
+
+--- ARGS FILES
+	- /solidity-frameworks/foundry/packages/nextjs/app/blockexplorer/address/%5Baddress%5D/page.tsx.args.mjs
+
+
+--- RESULTING ARGS
+	- artifactsDirName:	[out]

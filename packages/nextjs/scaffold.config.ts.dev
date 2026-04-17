@@ -1,0 +1,10 @@
+--- TEMPLATE FILE
+templates/base/packages/nextjs/scaffold.config.ts.template.mjs
+
+
+--- ARGS FILES
+	- /solidity-frameworks/foundry/packages/nextjs/scaffold.config.ts.args.mjs
+
+
+--- RESULTING ARGS
+	- configOverrides:	[[object Object]]
