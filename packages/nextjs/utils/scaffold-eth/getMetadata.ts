@@ -1,11 +1,14 @@
-
 import type { Metadata } from "next";
 
-
-const baseUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
-  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-  : `http://localhost:${process.env.PORT || 3000}`;
-const titleTemplate = "%s | Scaffold-ETH 2";
+// Prefer NEXT_PUBLIC_PRODUCTION_URL (set at build time for live domain) so
+// OG/Twitter images resolve to an absolute public URL, not localhost.
+const baseUrl = process.env.NEXT_PUBLIC_PRODUCTION_URL
+  ? process.env.NEXT_PUBLIC_PRODUCTION_URL.startsWith("http")
+    ? process.env.NEXT_PUBLIC_PRODUCTION_URL
+    : `https://${process.env.NEXT_PUBLIC_PRODUCTION_URL}`
+  : process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : `http://localhost:${process.env.PORT || 3000}`;
 
 export const getMetadata = ({
   title,
@@ -19,42 +22,39 @@ export const getMetadata = ({
   const imageUrl = `${baseUrl}${imageRelativePath}`;
 
   return {
-  metadataBase: new URL(baseUrl),
-  title: {
-    default: title,
-    template: titleTemplate
-  },
-  description: description,
-  openGraph: {
+    metadataBase: new URL(baseUrl),
     title: {
       default: title,
-      template: titleTemplate
+      template: "%s",
     },
     description: description,
-    images: [
-      {
-        url: imageUrl
-      }
-    ]
-  },
-  twitter: {
-    title: {
-      default: title,
-      template: titleTemplate
+    openGraph: {
+      title: {
+        default: title,
+        template: "%s",
+      },
+      description: description,
+      images: [
+        {
+          url: imageUrl,
+        },
+      ],
     },
-    description: description,
-    images: [
-      imageUrl
-    ]
-  },
-  icons: {
-    icon: [
-      {
-        url: '/favicon.png',
-        sizes: '32x32',
-        type: 'image/png'
-      }
-    ]
-  }
+    twitter: {
+      title: {
+        default: title,
+        template: "%s",
+      },
+      description: description,
+      images: [imageUrl],
+    },
+    icons: {
+      icon: [
+        {
+          url: "/favicon.svg",
+          type: "image/svg+xml",
+        },
+      ],
+    },
+  };
 };
-}

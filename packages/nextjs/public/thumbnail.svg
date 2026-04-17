@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1220"/>
+      <stop offset="100%" stop-color="#212638"/>
+    </linearGradient>
+    <linearGradient id="up" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#34eeb6"/>
+      <stop offset="100%" stop-color="#2cb38c"/>
+    </linearGradient>
+    <linearGradient id="dn" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ff8863"/>
+      <stop offset="100%" stop-color="#d35a3a"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <g font-family="system-ui, sans-serif" font-weight="800" text-anchor="middle">
+    <text x="600" y="220" font-size="140" fill="#ffffff" letter-spacing="8">UP/DOWN</text>
+    <text x="600" y="300" font-size="36" fill="#93bbfb" letter-spacing="6">1-MINUTE BINARY PRICE GAME ON BASE</text>
+  </g>
+  <g transform="translate(380,380)">
+    <rect width="180" height="100" rx="18" fill="url(#up)"/>
+    <text x="90" y="65" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="800" font-size="44" fill="#0b1220">UP</text>
+  </g>
+  <g transform="translate(640,380)">
+    <rect width="180" height="100" rx="18" fill="url(#dn)"/>
+    <text x="90" y="65" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="800" font-size="44" fill="#0b1220">DOWN</text>
+  </g>
+  <text x="600" y="560" text-anchor="middle" font-family="system-ui,sans-serif" font-size="28" fill="#ffffff" opacity="0.8">Bet USDC · Win CLAWD at 1.76x · 60-second rounds</text>
+</svg>
