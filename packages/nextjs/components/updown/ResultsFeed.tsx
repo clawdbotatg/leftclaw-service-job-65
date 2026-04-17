@@ -3,11 +3,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { Address } from "@scaffold-ui/components";
 import { usePublicClient } from "wagmi";
-import { useScaffoldContract, useScaffoldEventHistory } from "~~/hooks/scaffold-eth";
+import { useDeployedContractInfo, useScaffoldContract, useScaffoldEventHistory } from "~~/hooks/scaffold-eth";
 import scaffoldConfig from "~~/scaffold.config";
 import { ASSET_LABEL, BET_STATUS, DIRECTION_LABEL, formatClawd, formatPrice, formatUsdc } from "~~/utils/updown/format";
 
 const TARGET_CHAIN_ID = scaffoldConfig.targetNetworks[0].id;
+
+// Deploy block fallback — matches `deployedContracts.ts.UpDown.deployedOnBlock`.
+// Used only if `useDeployedContractInfo` is still resolving so we never scan
+// from Base genesis (~44M blocks).
+const UPDOWN_DEPLOY_BLOCK = 44836164n;
 
 type Row = {
   betId: bigint;
@@ -32,11 +37,14 @@ type Row = {
 export const ResultsFeed = () => {
   const publicClient = usePublicClient({ chainId: TARGET_CHAIN_ID });
   const { data: upDown } = useScaffoldContract({ contractName: "UpDown" });
+  const { data: deployedContract } = useDeployedContractInfo({ contractName: "UpDown" });
+  const fromBlock =
+    deployedContract?.deployedOnBlock !== undefined ? BigInt(deployedContract.deployedOnBlock) : UPDOWN_DEPLOY_BLOCK;
 
   const { data: settledEvents } = useScaffoldEventHistory({
     contractName: "UpDown",
     eventName: "BetSettled",
-    fromBlock: 0n,
+    fromBlock,
     watch: true,
   });
 

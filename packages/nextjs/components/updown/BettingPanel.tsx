@@ -5,6 +5,7 @@ import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { formatUnits, parseUnits } from "viem";
 import { useAccount, useReadContract, useSwitchChain, useWriteContract } from "wagmi";
 import { useScaffoldContract, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useWriteAndOpen } from "~~/hooks/updown/useWriteAndOpen";
 import scaffoldConfig from "~~/scaffold.config";
 import { notification } from "~~/utils/scaffold-eth";
 import { getParsedError } from "~~/utils/scaffold-eth";
@@ -119,6 +120,7 @@ export const BettingPanel = ({ asset, direction, betUsdc, setAsset, setDirection
   const { writeContractAsync: writeUpDown, isMining: isBetting } = useScaffoldWriteContract({
     contractName: "UpDown",
   });
+  const { writeAndOpen } = useWriteAndOpen();
 
   // --- Approval pending/cooldown state -------------------------------------
 
@@ -163,12 +165,16 @@ export const BettingPanel = ({ asset, direction, betUsdc, setAsset, setDirection
     if (!upDownAddress) return;
     setApproveSubmitting(true);
     try {
-      await writeUsdc({
-        abi: USDC_ABI,
-        address: USDC_ADDRESS,
-        functionName: "approve",
-        args: [upDownAddress, usdcAmount],
-      });
+      // writeAndOpen wraps the write so that on mobile we nudge the wallet app
+      // open ~2s after the request is sent (WC v2 won't auto-open the wallet).
+      await writeAndOpen(() =>
+        writeUsdc({
+          abi: USDC_ABI,
+          address: USDC_ADDRESS,
+          functionName: "approve",
+          args: [upDownAddress, usdcAmount],
+        }),
+      );
       notification.success("USDC approval submitted");
       startApproveCooldown();
     } catch (e) {
@@ -181,10 +187,12 @@ export const BettingPanel = ({ asset, direction, betUsdc, setAsset, setDirection
 
   const handlePlaceBet = async () => {
     try {
-      await writeUpDown({
-        functionName: "placeBet",
-        args: [asset, direction, usdcAmount],
-      });
+      await writeAndOpen(() =>
+        writeUpDown({
+          functionName: "placeBet",
+          args: [asset, direction, usdcAmount],
+        }),
+      );
       notification.success(`${ASSET_LABEL[asset]} ${direction === 0 ? "UP" : "DOWN"} bet placed — settle in 60s`);
     } catch (e) {
       notification.error(prettifyError(e));

@@ -194,3 +194,56 @@ A bare `http()` with no URL falls back to viem's default public RPC list. On Bas
 ## GitHub Issues Filed
 
 See the issues list for job-65 + frontend-audit labels. Commits / pushes will follow.
+
+---
+
+# Stage 8 Resolution
+
+All 7 GitHub issues from Stage 7 were addressed in a single Stage 8 commit. Status per finding:
+
+### #13 — `useScaffoldEventHistory` `fromBlock: 0n` — **Fixed**
+- `packages/nextjs/components/updown/Stats.tsx`: now uses `useDeployedContractInfo({ contractName: "UpDown" })` and passes `BigInt(deployedContract.deployedOnBlock)` as `fromBlock`, with a hardcoded fallback constant `UPDOWN_DEPLOY_BLOCK = 44836164n` so we never hit `0n` even during a cold resolve.
+- `packages/nextjs/components/updown/ResultsFeed.tsx`: same treatment.
+- Grep confirmed: no other `useScaffoldEventHistory` call sites in the app.
+
+### #14 — `SafeERC20FailedOperation` wrapping — **Fixed**
+- `packages/nextjs/utils/updown/format.ts`: added `SafeERC20FailedOperation`, `ERC20InvalidReceiver`, `ERC20InvalidSender`, `ERC20InvalidSpender`, `ERC20InvalidApprover` entries to `KNOWN_ERROR_MESSAGES`. The main one maps to a balance+approval hint: *"USDC transfer failed — check that you have enough USDC and that you've approved the contract."*
+- Approve flow: the frontend calls `approve(upDownAddress, amount)` directly (no zero-first dance needed — USDC on Base is OZ v5 and does not enforce the "set to zero before changing" quirk of legacy USDT; the contract also uses `forceApprove` on its own router allowances, which is separate from the user's approval to UpDown). No change needed to the approve flow.
+
+### #15 — Default WalletConnect projectId — **Accepted with warning + documented**
+- `packages/nextjs/scaffold.config.ts`: reads `process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID` first. If unset in a non-production NODE_ENV, logs a `console.warn` so the developer/deployer knows they're on the default SE2 ID.
+- `packages/nextjs/.env.example`: expanded with clear comments directing to `https://cloud.walletconnect.com/` and noting that the variable must be set at build time for IPFS builds.
+- We cannot provision a WalletConnect Cloud project ID on the client's behalf (requires their email/ownership). This is now documented in `.env.example` and warned at dev-time; the client sets it when they rebuild for their domain. If the client does not rebuild, the default projectId ships — same as Stage 6 — but at least the path to fix it is obvious.
+
+### #16 — Bare `http()` public RPC fallback — **Fixed**
+- `packages/nextjs/services/web3/wagmiConfig.tsx`: removed the bare `http()` from the fallback list. The new order:
+  1. `rpcOverrides[chainId]` if configured
+  2. Alchemy URL (via `getAlchemyHttpUrl`)
+  3. For mainnet only: `https://mainnet.rpc.buidlguidl.com` as a secondary fallback (for ENS/price reads on the shared Alchemy default key)
+  4. If the fallback list would be empty (unknown chain without override or Alchemy coverage), use the chain's own `rpcUrls.default.http` — explicit URLs rather than viem's auto-selected public gateway list
+- Comment added explaining why `http()` with no URL is unsafe.
+
+### #17 — No mobile deep-linking (`writeAndOpen`) — **Fixed**
+- Added `packages/nextjs/hooks/updown/useWriteAndOpen.ts` — a hook exposing `writeAndOpen(() => writeContractAsync(...))`. Pattern: kick off the write inside `writeFn`, `setTimeout(openWallet, 2000)` to nudge the wallet app back into focus. Uses connector metadata + localStorage WC session peer name to pick a wallet-specific deep link (Rainbow, MetaMask, Trust, Coinbase, Phantom, Ledger) and falls back to `wc://` otherwise. No-op on desktop and when an injected provider is present.
+- Wired into every write handler:
+  - `BettingPanel.tsx`: `handleApprove`, `handlePlaceBet`
+  - `ActiveBets.tsx`: `handleSettle`, `handleCancel`
+  - `AdminPanel.tsx`: fundHouse approve/fund, withdrawHouse, setLimits, setSlippageBps
+
+### #18 — `manifest.json` SE2 defaults — **Fixed**
+- `packages/nextjs/public/manifest.json`: `name` and `short_name` = `UP/DOWN`, description set to "1-minute binary price game on Base. Bet USDC on ETH/BTC direction.", iconPath set to `favicon.svg` (not `logo.svg`).
+
+### #19 — QuoterV2 settle fallback — **Fixed (Option A)**
+- `packages/nextjs/components/updown/ActiveBets.tsx`: `handleSettle` now quotes each leg (payout + burn) in an independent try/catch. If QuoterV2 reverts on either leg, falls back to a conservative floor derived from the contract's own `slippageBps()` view (same formula as `_requireMinOutFloor` in `UpDown.sol`). User gets a notification when the fallback is used: *"Quote unavailable — using contract slippage floor. Settle still protected; price may be worse than ideal."* Also reads `slippageBps` via `useScaffoldReadContract` at the top of the row so the fallback knows the contract's current ceiling.
+
+---
+
+### Stage 8 Gate
+
+- `yarn check-types` → exit 0 (strict TS passes)
+- `yarn lint` → exit 0 (only two pre-existing `react-hooks/exhaustive-deps` warnings in `PriceChart.tsx`, unchanged from Stage 6)
+- `yarn build` → exit 0, `out/index.html` + `out/debug/index.html` both present, `out/` = 8.2 MB (unchanged order of magnitude from Stage 6 — no fat added)
+
+All Stage 7 ship-blocker FAILs are now PASS: `SafeERC20FailedOperation` is mapped; WC projectId behavior is documented + warned in dev (best we can do without client-provisioned ID). Should-fix FAILs (mobile deep-linking, manifest.json, error mapping) all resolved. Scrutiny FAILs (fromBlock, bare http(), QuoterV2 fallback) all resolved.
+
+Stage 9 can upload `packages/nextjs/out/` to bgipfs.

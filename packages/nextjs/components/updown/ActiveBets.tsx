@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAccount, usePublicClient } from "wagmi";
 import { useScaffoldContract, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useWriteAndOpen } from "~~/hooks/updown/useWriteAndOpen";
 import scaffoldConfig from "~~/scaffold.config";
 import { notification } from "~~/utils/scaffold-eth";
 import { getParsedError } from "~~/utils/scaffold-eth";
@@ -10,6 +11,7 @@ import {
   ASSET_LABEL,
   DIRECTION_LABEL,
   KNOWN_ERROR_MESSAGES,
+  USDC_DECIMALS,
   formatCountdown,
   formatPrice,
   formatUsdc,
@@ -184,8 +186,18 @@ const BetRow = ({
 }) => {
   const { writeContractAsync: writeUpDown } = useScaffoldWriteContract({ contractName: "UpDown" });
   const publicClient = usePublicClient({ chainId: TARGET_CHAIN_ID });
+  const { writeAndOpen } = useWriteAndOpen();
   const [isSettling, setIsSettling] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+
+  // Contract's slippageBps — used as the conservative fallback floor when the
+  // off-chain QuoterV2 simulation fails (pool revert, RPC hiccup, etc). The
+  // on-chain settle path also enforces this as a floor via `_requireMinOutFloor`,
+  // so falling back to it exactly matches what the contract would accept.
+  const { data: slippageBps } = useScaffoldReadContract({
+    contractName: "UpDown",
+    functionName: "slippageBps",
+  });
 
   const settleAt = Number(bet.settleAfter);
   const cancelAt = settleAt + 300;
@@ -210,18 +222,63 @@ const BetRow = ({
       const payoutUsdc = (bet.usdcAmount * bet.payoutMultiplierBps) / 10000n;
       const burnUsdc = bet.usdcAmount / 2n;
 
-      const [payoutQuote, burnQuote] = await Promise.all([
-        quoteUsdcToClawd(publicClient as any, payoutUsdc),
-        burnUsdc > 0n ? quoteUsdcToClawd(publicClient as any, burnUsdc) : Promise.resolve(0n),
-      ]);
+      // Quote each leg independently so one revert doesn't doom the other.
+      // If a leg's QuoterV2 simulation fails, fall back to the contract's
+      // `slippageBps` floor (the same floor the contract would enforce anyway).
+      // The fallback floor formula mirrors `_requireMinOutFloor` in UpDown.sol:
+      //   minOut >= usdcIn * 1e12 * (10000 - slippageBps) / (1000 * 10000)
+      // Using a USDC→CLAWD decimal bump (6 → 18 = * 1e12) and the contract's
+      // published slippage ceiling.
+      const bps = slippageBps !== undefined ? (slippageBps as bigint) : 500n; // default 5%
+      const DENOM = 10000n;
+      const DECIMAL_BUMP = 10n ** BigInt(18 - USDC_DECIMALS); // 1e12
+      // The on-chain floor also divides by 1000 (intentional looseness — the
+      // frontend gets to choose the actual slippage, floor just prevents MEV).
+      // We use it verbatim as an absolute-minimum fallback.
+      const conservativeFloor = (amount: bigint) => (amount * DECIMAL_BUMP * (DENOM - bps)) / (1000n * DENOM);
 
-      const minPayoutClawd = applySlippage(payoutQuote);
-      const minBurnClawd = burnUsdc > 0n ? applySlippage(burnQuote) : 0n;
+      let minPayoutClawd: bigint;
+      let minBurnClawd: bigint;
+      let usedPayoutFallback = false;
+      let usedBurnFallback = false;
 
-      await writeUpDown({
-        functionName: "settle",
-        args: [bet.betId, minPayoutClawd, minBurnClawd],
-      });
+      try {
+        const payoutQuote = await quoteUsdcToClawd(publicClient as any, payoutUsdc);
+        minPayoutClawd = applySlippage(payoutQuote);
+      } catch (qe) {
+        console.warn("QuoterV2 payout leg failed — falling back to slippageBps floor", qe);
+        minPayoutClawd = conservativeFloor(payoutUsdc);
+        usedPayoutFallback = true;
+      }
+
+      if (burnUsdc > 0n) {
+        try {
+          const burnQuote = await quoteUsdcToClawd(publicClient as any, burnUsdc);
+          minBurnClawd = applySlippage(burnQuote);
+        } catch (qe) {
+          console.warn("QuoterV2 burn leg failed — falling back to slippageBps floor", qe);
+          minBurnClawd = conservativeFloor(burnUsdc);
+          usedBurnFallback = true;
+        }
+      } else {
+        minBurnClawd = 0n;
+      }
+
+      if (usedPayoutFallback || usedBurnFallback) {
+        // Warn the user we're using the contract floor instead of a live quote
+        // — they still get MEV protection from the floor, but slippage may be
+        // higher than a normal settle.
+        notification.success(
+          "Quote unavailable — using contract slippage floor. Settle still protected; price may be worse than ideal.",
+        );
+      }
+
+      await writeAndOpen(() =>
+        writeUpDown({
+          functionName: "settle",
+          args: [bet.betId, minPayoutClawd, minBurnClawd],
+        }),
+      );
       notification.success(`Bet #${bet.betId.toString()} settled`);
     } catch (e) {
       notification.error(prettifyError(e));
@@ -233,10 +290,12 @@ const BetRow = ({
   const handleCancel = async () => {
     setIsCancelling(true);
     try {
-      await writeUpDown({
-        functionName: "cancelExpiredBet",
-        args: [bet.betId],
-      });
+      await writeAndOpen(() =>
+        writeUpDown({
+          functionName: "cancelExpiredBet",
+          args: [bet.betId],
+        }),
+      );
       notification.success(`Bet #${bet.betId.toString()} refunded`);
     } catch (e) {
       notification.error(prettifyError(e));

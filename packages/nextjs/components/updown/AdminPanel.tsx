@@ -5,6 +5,7 @@ import { Address } from "@scaffold-ui/components";
 import { parseUnits } from "viem";
 import { useAccount, useReadContract, useWriteContract } from "wagmi";
 import { useScaffoldContract, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useWriteAndOpen } from "~~/hooks/updown/useWriteAndOpen";
 import scaffoldConfig from "~~/scaffold.config";
 import { notification } from "~~/utils/scaffold-eth";
 import { getParsedError } from "~~/utils/scaffold-eth";
@@ -99,6 +100,7 @@ const FundHouseCard = ({ upDownAddress }: { upDownAddress: `0x${string}` | undef
   const { writeContractAsync: writeUpDown, isMining: isFunding } = useScaffoldWriteContract({
     contractName: "UpDown",
   });
+  const { writeAndOpen } = useWriteAndOpen();
 
   const parsed = useMemo(() => {
     try {
@@ -127,12 +129,14 @@ const FundHouseCard = ({ upDownAddress }: { upDownAddress: `0x${string}` | undef
   const handleApprove = async () => {
     if (!parsed || !upDownAddress) return;
     try {
-      await writeUsdc({
-        abi: USDC_MIN_ABI,
-        address: USDC_ADDRESS,
-        functionName: "approve",
-        args: [upDownAddress, parsed],
-      });
+      await writeAndOpen(() =>
+        writeUsdc({
+          abi: USDC_MIN_ABI,
+          address: USDC_ADDRESS,
+          functionName: "approve",
+          args: [upDownAddress, parsed],
+        }),
+      );
       notification.success("USDC approved for fundHouse");
       setTimeout(() => void refetchAllowance(), 3000);
     } catch (e) {
@@ -143,7 +147,7 @@ const FundHouseCard = ({ upDownAddress }: { upDownAddress: `0x${string}` | undef
   const handleFund = async () => {
     if (!parsed) return;
     try {
-      await writeUpDown({ functionName: "fundHouse", args: [parsed] });
+      await writeAndOpen(() => writeUpDown({ functionName: "fundHouse", args: [parsed] }));
       notification.success(`House pool funded with ${amount} USDC`);
     } catch (e) {
       notification.error(getParsedError(e) || "fundHouse failed");
@@ -188,6 +192,7 @@ const WithdrawHouseCard = () => {
   const { writeContractAsync: writeUpDown, isMining } = useScaffoldWriteContract({
     contractName: "UpDown",
   });
+  const { writeAndOpen } = useWriteAndOpen();
 
   const parsed = useMemo(() => {
     try {
@@ -204,7 +209,7 @@ const WithdrawHouseCard = () => {
   const handleWithdraw = async () => {
     if (!parsed) return;
     try {
-      await writeUpDown({ functionName: "withdrawHouse", args: [parsed] });
+      await writeAndOpen(() => writeUpDown({ functionName: "withdrawHouse", args: [parsed] }));
       notification.success(`Withdrew ${amount} USDC`);
     } catch (e) {
       notification.error(getParsedError(e) || "withdrawHouse failed");
@@ -250,6 +255,7 @@ const SetLimitsCard = () => {
   const { writeContractAsync: writeUpDown, isMining } = useScaffoldWriteContract({
     contractName: "UpDown",
   });
+  const { writeAndOpen } = useWriteAndOpen();
 
   const [minStr, setMinStr] = useState("");
   const [maxStr, setMaxStr] = useState("");
@@ -276,7 +282,7 @@ const SetLimitsCard = () => {
       const minP = parseUnits(minStr || "0", USDC_DECIMALS);
       const maxP = parseUnits(maxStr || "0", USDC_DECIMALS);
       const bpsP = BigInt(bpsStr || "0");
-      await writeUpDown({ functionName: "setLimits", args: [minP, maxP, bpsP] });
+      await writeAndOpen(() => writeUpDown({ functionName: "setLimits", args: [minP, maxP, bpsP] }));
       notification.success("Limits updated");
     } catch (e) {
       notification.error(getParsedError(e) || "setLimits failed");
@@ -334,6 +340,7 @@ const SetSlippageCard = () => {
   const { writeContractAsync: writeUpDown, isMining } = useScaffoldWriteContract({
     contractName: "UpDown",
   });
+  const { writeAndOpen } = useWriteAndOpen();
 
   const [bpsStr, setBpsStr] = useState("");
 
@@ -346,7 +353,7 @@ const SetSlippageCard = () => {
   const handle = async () => {
     try {
       const n = BigInt(bpsStr || "0");
-      await writeUpDown({ functionName: "setSlippageBps", args: [n] });
+      await writeAndOpen(() => writeUpDown({ functionName: "setSlippageBps", args: [n] }));
       notification.success("Slippage updated");
     } catch (e) {
       notification.error(getParsedError(e) || "setSlippageBps failed");

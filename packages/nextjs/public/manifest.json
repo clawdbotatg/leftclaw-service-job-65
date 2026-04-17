@@ -1,5 +1,6 @@
 {
-  "name": "Scaffold-ETH 2 DApp",
-  "description": "A DApp built with Scaffold-ETH",
-  "iconPath": "logo.svg"
+  "name": "UP/DOWN",
+  "short_name": "UP/DOWN",
+  "description": "1-minute binary price game on Base. Bet USDC on ETH/BTC direction.",
+  "iconPath": "favicon.svg"
 }

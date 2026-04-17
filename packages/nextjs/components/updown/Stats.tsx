@@ -1,8 +1,12 @@
 "use client";
 
 import { useMemo } from "react";
-import { useScaffoldEventHistory, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
+import { useDeployedContractInfo, useScaffoldEventHistory, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { formatClawd, formatUsdc } from "~~/utils/updown/format";
+
+// Deploy block fallback — matches `deployedContracts.ts.UpDown.deployedOnBlock`.
+// Used if the hook hasn't resolved yet so we don't accidentally scan from genesis.
+const UPDOWN_DEPLOY_BLOCK = 44836164n;
 
 /**
  * Four top-line stats driven by on-chain state:
@@ -22,10 +26,17 @@ export const Stats = () => {
     watch: true,
   });
 
+  // Pull the deploy block off the deployment artifact; fall back to a
+  // hardcoded constant if the hook hasn't resolved (cold page load).
+  // Scanning from 0 on Base would paginate ~44M blocks — avoid at all costs.
+  const { data: deployedContract } = useDeployedContractInfo({ contractName: "UpDown" });
+  const fromBlock =
+    deployedContract?.deployedOnBlock !== undefined ? BigInt(deployedContract.deployedOnBlock) : UPDOWN_DEPLOY_BLOCK;
+
   const { data: settledEvents } = useScaffoldEventHistory({
     contractName: "UpDown",
     eventName: "BetSettled",
-    fromBlock: 0n,
+    fromBlock,
     watch: true,
   });
 

@@ -88,4 +88,13 @@ export const KNOWN_ERROR_MESSAGES: Record<string, string> = {
   MinOutBelowFloor: "The min-out is too low. Try increasing slippage tolerance.",
   ERC20InsufficientAllowance: "You need to approve USDC first (click Approve).",
   ERC20InsufficientBalance: "Not enough USDC in your wallet.",
+  // OZ v5's SafeERC20 wraps the underlying ERC20 custom error into this one.
+  // When a user lacks allowance or balance on placeBet/fundHouse, this is what
+  // actually surfaces — map it so users don't see the raw selector.
+  SafeERC20FailedOperation:
+    "USDC transfer failed — check that you have enough USDC and that you've approved the contract.",
+  ERC20InvalidReceiver: "Invalid USDC receiver address.",
+  ERC20InvalidSender: "Invalid USDC sender address.",
+  ERC20InvalidSpender: "Invalid USDC spender address.",
+  ERC20InvalidApprover: "Invalid USDC approver address.",
 };
