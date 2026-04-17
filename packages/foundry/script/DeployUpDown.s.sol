@@ -21,8 +21,14 @@ contract DeployUpDown is ScaffoldETHDeploy {
     address constant ETH_USD_FEED = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
     address constant BTC_USD_FEED = 0x64c911996D3c6aC71f9b455B1E8E7266BcbD848F;
 
+    // Base L2 sequencer uptime feed — used to reject prices observed during/after
+    // a sequencer outage. Pass address(0) on non-L2 forks to skip the check.
+    address constant SEQUENCER_UPTIME_FEED = 0xBCF85224fc0756B9Fa45aA7892530B47e10b6433;
+
     function run() external ScaffoldEthDeployerRunner {
-        UpDown upDown = new UpDown(OWNER, USDC, SWAP_ROUTER_02, ETH_USD_FEED, BTC_USD_FEED, CLAWD, WETH);
+        UpDown upDown = new UpDown(
+            OWNER, USDC, SWAP_ROUTER_02, ETH_USD_FEED, BTC_USD_FEED, CLAWD, WETH, SEQUENCER_UPTIME_FEED
+        );
 
         deployments.push(Deployment({ name: "UpDown", addr: address(upDown) }));
     }

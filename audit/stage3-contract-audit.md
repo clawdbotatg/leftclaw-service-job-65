@@ -548,3 +548,66 @@ Stage 4 **must** resolve all Critical and High findings before proceeding to Sta
 - `[Medium] Swap allowance reset comment clarity` — Finding [M-6]
 
 End of report.
+
+---
+
+## Stage 4 Resolution
+
+Stage 4 applied audit-driven fixes to `packages/foundry/contracts/UpDown.sol` and
+`packages/foundry/script/DeployUpDown.s.sol`. `forge build` exits 0 with zero
+compiler warnings. All Critical and High findings are resolved; Mediums are
+addressed; Lows/Infos — trivial ones fixed, others documented.
+
+### Status per finding
+
+| ID  | Severity | Status | Resolution |
+|-----|----------|--------|------------|
+| C-1 | Critical | Fixed  | `BURN_ADDRESS` changed from `address(0)` to `0x000000000000000000000000000000000000dEaD`. Comment updated to note OZ v5's receiver check. |
+| C-2 | Critical | Fixed  | WIN path now `housePool = housePool + b.usdcAmount - payoutUsdc`. Guarded with `housePool + usdcAmount >= payoutUsdc` to avoid underflow (bet-time pre-check already guarantees this). |
+| H-1 | High     | Fixed  | `settle(betId, minPayoutClawd, minBurnClawd)` — caller provides both min-outs. Both are floor-checked via `_requireMinOutFloor(usdcIn, minOut)`, which rejects the degenerate `=1` case at any non-dust bet size. `slippageBps` (default 500) is owner-settable via `setSlippageBps`, bounded by `MAX_SLIPPAGE_BPS = 1000` (10%). |
+| H-2 | High     | Fixed  | `_readFeedWithChecks` enforces `answer > 0`, `answeredInRound >= roundId`, `updatedAt != 0`, `block.timestamp - updatedAt <= MAX_PRICE_STALENESS (3600s)`. Optional Base L2 sequencer uptime feed wired in via constructor (address `0xBCF85224fc0756B9Fa45aA7892530B47e10b6433` on Base mainnet). Zero address disables the check for test forks. |
+| H-3 | High     | Fixed  | `Bet` now stores `entryRoundId`. `settle` requires `roundId > entryRoundId` and `updatedAt >= settleAfter - SETTLE_DELAY`. Searcher cannot pick a pre-settleAfter round to flip the outcome. |
+| H-4 | High     | Fixed  | `Bet` snapshots `payoutMultiplierBps` at `placeBet`. `settle` uses the snapshot, so owner changes do not affect pending bets. `setLimits` now bounds `_payoutMultiplierBps` to `[MIN_PAYOUT_BPS=10000, MAX_PAYOUT_BPS=50000]` (1.0x – 5.0x). |
+| M-1 | Medium   | Fixed  | Added NatSpec on `settle`: "Ties (currentPrice == entryPrice) resolve as LOST. House wins ties." |
+| M-2 | Medium   | Fixed  | Per-player index `_playerBetIds` maintained at `placeBet`. `getPendingBets` now iterates only the player's bets (O(player-bets), not O(N)). Added `getPlayerBetIds(player)` view for full history. |
+| M-3 | Medium   | Fixed  | `Ownable` → `Ownable2Step`. Constructor still calls `Ownable(_owner)`, which `Ownable2Step` inherits from. Ownership transfers now require `acceptOwnership` from the new owner. |
+| M-4 | Medium   | Fixed  | `placeBet` requires `block.timestamp - updatedAt >= MIN_PRICE_AGE_AT_BET (15s)`. Searcher cannot front-run a mempool-visible Chainlink push and bet at the pre-push price. |
+| M-5 | Medium   | Fixed  | `placeBet` writes state and emits `BetPlaced` before calling `safeTransferFrom`. `fundHouse` and `withdrawHouse` likewise reordered to CEI. |
+| M-6 | Medium   | Fixed  | Added explicit comment on `forceApprove(router, 0)` at `_swapUsdcToClawd` reset line flagging that the reset is load-bearing. |
+| L-1 | Low      | Fixed  | `BetSettled` now has `indexed status`. |
+| L-2 | Low      | Fixed  | `cancelExpiredBet` restricted to `msg.sender == b.player || msg.sender == owner()`. Custom error `NotAuthorized`. |
+| L-3 | Low      | Fixed  | Added `Deployed` event emitted once from constructor with every external address and initial limit. |
+| L-4 | Low      | Accepted | USDC blocklisting is an external risk with no code-level mitigation; documented in the report. Not expected to be actioned for Base mainnet. |
+| L-5 | Low      | Deferred | Constants `SETTLE_DELAY` and `CANCEL_GRACE` remain constants per spec; added NatSpec comment. |
+| I-1 | Info     | Deferred | Pragma remains `^0.8.20` to match SE-2 scaffold conventions; Foundry compiles with `0.8.30`. Not pinning to avoid a scaffold-wide change. |
+| I-2 | Info     | Deferred | `uint8` storage for `asset`/`direction` retained for gas; bounds checks at `placeBet` already enforce valid range. |
+| I-3 | Info     | Accepted | `unchecked` block is safe; physical impossibility of overflow. |
+| I-4 | Info     | Fixed    | `_getPriceView` removed; `getPrice(uint8)` inlines the asset bounds check and calls `_readFeedWithChecks` directly. |
+
+### Constructor argument change (for Stage 5 deploy)
+
+`UpDown.constructor` now takes an 8th argument: `address _sequencerUptimeFeed`.
+`DeployUpDown.s.sol` is updated to pass Base mainnet's sequencer uptime feed at
+`0xBCF85224fc0756B9Fa45aA7892530B47e10b6433`. Stage 5 should use the existing
+`yarn deploy` command — no broadcast flag changes required.
+
+### API change (for Stage 6 frontend)
+
+`settle(uint256 betId)` → `settle(uint256 betId, uint256 minPayoutClawd, uint256 minBurnClawd)`.
+The frontend (or a keeper relayer) must supply non-dust min-outs. Recommended
+implementation: call Uniswap V3's `QuoterV2` off-chain for both swap paths
+(USDC→WETH→CLAWD for payout; USDC→WETH→CLAWD for burn), apply 5% downward
+slack, pass as arguments.
+
+### Build verification
+
+```
+$ forge build
+Compiling 41 files with Solc 0.8.30
+Solc 0.8.30 finished in 459.16ms
+Compiler run successful!
+```
+
+Zero compiler warnings. Zero errors. Stage 2 baseline parity preserved.
+
+End of Stage 4 Resolution.
